@@ -1,0 +1,680 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "prefix": {
+            "type": "string",
+            "defaultValue": "mloverdrive",
+            "metadata": {
+                "description": "Name of the resourceGroup to create"
+            }
+        },
+        "nodeWorkerVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_D2_v4",
+            "metadata": {
+                "description": "VM size of the worker node cluster"
+            }
+        },
+        "nodeWorkerOsDiskType": {
+            "type": "string",
+            "defaultValue": "Managed",
+            "metadata": {
+                "description": "Os Disk type of the worker node cluster (Managed|Ephemeral)"
+            }
+        },
+        "nodeSystemVmSize": {
+            "type": "string",
+            "defaultValue": "Standard_F8s_v2",
+            "metadata": {
+                "description": "VM size of the system node cluster"
+            }
+        }
+    },
+    "variables": {
+        "location": "[resourceGroup().location]",
+        "storageAccountInputName": "[concat(parameters('prefix'),'input')]",
+        "storageAccountOutputName": "[concat(parameters('prefix'),'output')]",
+        "storageAccountInputContainerName": "input",
+        "storageAccountOutputContainerName": "output",
+        "insightsName": "[concat(parameters('prefix'),'-insight')]",
+        "alertMgmtSmartDetectRuleName": "[concat(parameters('prefix'),'-smartdetectrule')]",
+        "actiongroups_application_insights_smart_detection_externalid": "[concat('/subscriptions/',subscription().subscriptionId,'/resourceGroups/',resourceGroup().name,'/providers/microsoft.insights/actiongroups/application insights smart detection')]",
+        "eventGridSystemTopicName": "[concat(parameters('prefix'),'-eventgridtopic')]",
+        "serviceBusNamespaceName": "[concat(parameters('prefix'),'-servicebusnamespace')]",
+        "serviceBusQueueName": "[concat(parameters('prefix'),'-servicebusqueue')]",
+        "diagnosticsettingsName": "Send to all locations",
+        "operationalIinsightsWorkspaceName": "[concat(parameters('prefix'),'-insightsworkspace')]",
+        "storageAccountInputSasValues": {
+            "canonicalizedResource": "[concat('/blob/', variables('storageAccountInputName'), '/', variables('storageAccountInputContainerName'))]",
+            "signedServices": "b",
+            "signedResource": "c",
+            "signedPermission": "racwdl",
+            "signedStart": "2017-05-24T00:00:00Z",
+            "signedExpiry": "2050-01-01T00:00:00Z"
+        },
+        "containerRegistryName": "[parameters('prefix')]",
+        "containerSerivceManagedClustersName": "[concat(parameters('prefix'),'-aks')]",
+        "containerSerivceManagedClustersDNSName": "[concat(parameters('prefix'),'-akasdns')]",
+        "containerSerivceManagedClustersNodeResourceGroupName": "[concat(parameters('prefix'),'-aks-rg')]",
+        //"containerSerivceManagedClustersPool1Label": "agentpoollabel1",
+        //"containerSerivceManagedClustersPool2Label": "agentpoollabel2",
+        "containerSerivceManagedClustersPool1Name": "[concat(variables('containerSerivceManagedClustersName'), '/agentpool1')]",
+        "containerSerivceManagedClustersPool2Name": "[concat(variables('containerSerivceManagedClustersName'), '/agentpool2')]",
+        //"containerSerivceManagedClustersPool1Name": "[concat(parameters('prefix'), 'agentpool1')]",
+        //"containerSerivceManagedClustersPool2Name": "[concat(parameters('prefix'), 'agentpool2')]",
+        "containerSerivceManagedClustersPIPName": "[concat(parameters('prefix'),'-akspip')]",
+        "containerRegistryRoleAcrPullId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+        "aks2acrAssignmentName": "[guid('aks2acrAssignmentNameContainerRegistryRoleAcrPullId')]",
+        "aks2sbAssignmentName": "[guid('aks2sbAssignmentNameAzureServiceBusDataOwnerId')]",
+        "aksPool2acrAssignmentName": "[guid('aksPool2acrAssignmentNameContainerRegistryRoleAcrPullId')]",
+        "containerRegistryScope": "[concat('Microsoft.ContainerRegistry/registries', '/', variables('containerRegistryName'))]",
+        //"serviceBusScope": "[concat('Microsoft.ServiceBus/namespaces/queues', '/', variables('serviceBusQueueName'))]",
+        "serviceBusScope": "[concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', resourceGroup().id, '/providers/Microsoft.ServiceBus/namespaces/',variables('serviceBusNamespaceName'))]",
+        //"AzureServiceBusDataOwnerId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '090c5cfd-751d-490a-894a-3ce6f1109419')]"
+        "AzureServiceBusDataOwnerId": "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Authorization/roleDefinitions/', '090c5cfd-751d-490a-894a-3ce6f1109419')]"    },
+    "resources": [
+        {
+            "type": "Microsoft.Storage/storageAccounts/providers/diagnosticsettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(variables('storageAccountInputName'),'/Microsoft.Insights/', variables('diagnosticsettingsName'))]",
+
+            "properties": {
+                "workspaceId": "[resourceId('Microsoft.Operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]",
+                "metrics": [
+                    {
+                        "category": "Transaction",
+                        "enabled": true
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/providers/diagnosticsettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(variables('storageAccountInputName'),'/default/Microsoft.Insights/', variables('diagnosticsettingsName'))]",
+            "properties": {
+                "workspaceId": "[resourceId('Microsoft.Operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]",
+                "logs": [
+                    {
+                        "category": "StorageRead",
+                        "enabled": true
+                    },
+                    {
+                        "category": "StorageWrite",
+                        "enabled": true
+                    }
+                ],
+                "metrics": [
+                    {
+                        "category": "Transaction",
+                        "enabled": true
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/providers/diagnosticsettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(variables('storageAccountOutputName'),'/Microsoft.Insights/', variables('diagnosticsettingsName'))]",
+
+            "properties": {
+                "workspaceId": "[resourceId('Microsoft.Operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]",
+                "metrics": [
+                    {
+                        "category": "Transaction",
+                        "enabled": true
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/blobServices/providers/diagnosticsettings",
+            "apiVersion": "2017-05-01-preview",
+            "name": "[concat(variables('storageAccountOutputName'),'/default/Microsoft.Insights/', variables('diagnosticsettingsName'))]",
+            "properties": {
+                "workspaceId": "[resourceId('Microsoft.Operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]",
+                "logs": [
+                    {
+                        "category": "StorageRead",
+                        "enabled": true
+                    },
+                    {
+                        "category": "StorageWrite",
+                        "enabled": true
+                    }
+                ],
+                "metrics": [
+                    {
+                        "category": "Transaction",
+                        "enabled": true
+                    }
+                ]
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "microsoft.operationalinsights/workspaces",
+            "apiVersion": "2020-10-01",
+            "name": "[variables('operationalIinsightsWorkspaceName')]",
+            "location": "[variables('location')]",
+            "properties": {
+                "sku": {
+                    "name": "pergb2018"
+                },
+                "retentionInDays": 30,
+                "workspaceCapping": {
+                    "dailyQuotaGb": -1
+                },
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountInputName'))]",
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountOutputName'))]"
+            ]
+        },
+
+        {
+            "name": "[variables('insightsName')]",
+            "type": "Microsoft.Insights/components",
+            "apiVersion": "2020-02-02-preview",
+            "location": "[variables('location')]",
+            "kind": "web",
+            "properties": {
+                "Application_Type": "web",
+                "Request_Source": "rest",
+                "WorkspaceResourceId": "[resourceId('microsoft.operationalinsights/workspaces',variables('operationalIinsightsWorkspaceName'))]",
+                "publicNetworkAccessForIngestion": "Enabled",
+                "publicNetworkAccessForQuery": "Enabled"
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.operationalinsights/workspaces',variables('operationalIinsightsWorkspaceName'))]"
+            ]
+        },
+        {
+            "type": "microsoft.alertsmanagement/smartdetectoralertrules",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('alertMgmtSmartDetectRuleName')]",
+            "location": "global",
+            "dependsOn": [
+                "[resourceId('microsoft.insights/components', variables('insightsName'))]"
+            ],
+            "properties": {
+                "description": "Failure Anomalies notifies you of an unusual rise in the rate of failed HTTP requests or dependency calls.",
+                "state": "Enabled",
+                "severity": "Sev3",
+                "frequency": "PT1M",
+                "detector": {
+                    "id": "FailureAnomaliesDetector",
+                    "name": "Failure Anomalies",
+                    "description": "Detects if your application experiences an abnormal rise in the rate of HTTP requests or dependency calls that are reported as failed. The anomaly detection uses machine learning algorithms and occurs in near real time, therefore there's no need to define a frequency for this signal.<br/></br/>To help you triage and diagnose the problem, an analysis of the characteristics of the failures and related telemetry is provided with the detection. This feature works for any app, hosted in the cloud or on your own servers, that generates request or dependency telemetry - for example, if you have a worker role that calls <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackrequest\\\" target=\\\"_blank\\\">TrackRequest()</a> or <a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/application-insights/app-insights-api-custom-events-metrics#trackdependency\\\" target=\\\"_blank\\\">TrackDependency()</a>.<br/><br/><a class=\"ext-smartDetecor-link\" href=\\\"https://docs.microsoft.com/azure/azure-monitor/app/proactive-failure-diagnostics\\\" target=\\\"_blank\\\">Learn more about Failure Anomalies</a>",
+                    "supportedResourceTypes": [
+                        "ApplicationInsights"
+                    ]
+                },
+                "scope": [
+                    "[resourceId('microsoft.insights/components', variables('insightsName'))]"
+                ],
+                "actionGroups": {
+                    "groupIds": [
+                        "[variables('actiongroups_application_insights_smart_detection_externalid')]"
+                    ]
+                }
+            }
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('storageAccountInputName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot"
+            },
+            "resources": [
+                {
+                    "type": "blobServices/containers",
+                    "apiVersion": "2019-06-01",
+                    "name": "[concat('default/', variables('storageAccountInputContainerName'))]",
+                    "dependsOn": [
+                        "[variables('storageAccountInputName')]"
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts",
+            "apiVersion": "2019-06-01",
+            "name": "[variables('storageAccountOutputName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Standard_LRS",
+                "tier": "Standard"
+            },
+            "kind": "StorageV2",
+            "properties": {
+                "accessTier": "Hot"
+            },
+            "resources": [
+                {
+                    "type": "blobServices/containers",
+                    "apiVersion": "2019-06-01",
+                    "name": "[concat('default/', variables('storageAccountOutputContainerName'))]",
+                    "dependsOn": [
+                        "[variables('storageAccountOutputName')]"
+                    ]
+                }
+            ]
+        },
+        {
+            "type": "Microsoft.ServiceBus/namespaces",
+            "apiVersion": "2018-01-01-preview",
+            "name": "[variables('serviceBusNamespaceName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+            },
+            "properties": {
+                "zoneRedundant": false
+            }
+        },
+        {
+            "type": "Microsoft.ServiceBus/namespaces/queues",
+            "apiVersion": "2017-04-01",
+            "name": "[concat(variables('serviceBusNamespaceName'), '/',variables('serviceBusQueueName'))]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]"
+            ],
+            "properties": {
+                "lockDuration": "PT30S",
+                "maxSizeInMegabytes": 1024,
+                "requiresDuplicateDetection": true,
+                "requiresSession": false,
+                "defaultMessageTimeToLive": "P14D",
+                "deadLetteringOnMessageExpiration": false,
+                "enableBatchedOperations": true,
+                "duplicateDetectionHistoryTimeWindow": "PT10M",
+                "maxDeliveryCount": 10,
+                "status": "Active",
+                "autoDeleteOnIdle": "P10675199DT2H48M5.4775807S",
+                "enablePartitioning": false,
+                "enableExpress": false
+            }
+        },
+        {
+            "type": "Microsoft.ServiceBus/namespaces/AuthorizationRules",
+            "apiVersion": "2017-04-01",
+            "name": "[concat(variables('serviceBusNamespaceName'), '/RootManageSharedAccessKey')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]"
+            ],
+            "properties": {
+                "rights": [
+                    "Listen",
+                    "Manage",
+                    "Send"
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.ServiceBus/namespaces/queues/authorizationRules",
+            "apiVersion": "2017-04-01",
+            "name": "[concat(variables('serviceBusNamespaceName'), '/',variables('serviceBusQueueName'),'/', variables('serviceBusNamespaceName'), '_SERVICEBUS')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ServiceBus/namespaces/queues', variables('serviceBusNamespaceName'), variables('serviceBusQueueName'))]",
+                "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]"
+            ],
+            "properties": {
+                "rights": [
+                    "Manage",
+                    "Listen",
+                    "Send"
+                ]
+            }
+        },
+        {
+            "type": "Microsoft.EventGrid/systemTopics",
+            "apiVersion": "2020-04-01-preview",
+            "name": "[variables('eventGridSystemTopicName')]",
+            "location": "[variables('location')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountInputName'))]"
+            ],
+            "properties": {
+                "source": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountInputName'))]",
+                "topicType": "Microsoft.Storage.StorageAccounts"
+            }
+        },
+        {
+            "type": "Microsoft.EventGrid/systemTopics/eventSubscriptions",
+            "apiVersion": "2020-04-01-preview",
+            "name": "[concat(variables('eventGridSystemTopicName'), '/testfunceventsub')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.EventGrid/systemTopics', variables('eventGridSystemTopicName'))]",
+                "[resourceId('Microsoft.ServiceBus/namespaces/queues', variables('serviceBusNamespaceName'), variables('serviceBusQueueName'))]"
+            ],
+            "properties": {
+                "destination": {
+                    "properties": {
+                        "resourceId": "[resourceId('Microsoft.ServiceBus/namespaces/queues', variables('serviceBusNamespaceName'), variables('serviceBusQueueName'))]"
+                    },
+                    "endpointType": "ServiceBusQueue"
+                },
+                "filter": {
+                    "subjectEndsWith": ".txt",
+                    "includedEventTypes": [
+                        "Microsoft.Storage.BlobCreated"
+                    ]
+                },
+                "labels": [],
+                "eventDeliverySchema": "EventGridSchema",
+                "retryPolicy": {
+                    "maxDeliveryAttempts": 30,
+                    "eventTimeToLiveInMinutes": 1440
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerRegistry/registries",
+            "apiVersion": "2020-11-01-preview",
+            "name": "[variables('containerRegistryName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Standard",
+                "tier": "Standard"
+            },
+            "properties": {
+                "adminUserEnabled": false,
+                "policies": {
+                    "quarantinePolicy": {
+                        "status": "disabled"
+                    },
+                    "trustPolicy": {
+                        "type": "Notary",
+                        "status": "disabled"
+                    },
+                    "retentionPolicy": {
+                        "days": 7,
+                        "status": "disabled"
+                    }
+                },
+                "encryption": {
+                    "status": "disabled"
+                },
+                "dataEndpointEnabled": false,
+                "publicNetworkAccess": "Enabled",
+                "networkRuleBypassOptions": "AzureServices",
+                "zoneRedundancy": "Disabled"
+            }
+        },
+        {
+            "type": "Microsoft.ContainerService/managedClusters",
+            "apiVersion": "2021-02-01",
+            "name": "[variables('containerSerivceManagedClustersName')]",
+            "location": "[variables('location')]",
+            "sku": {
+                "name": "Basic",
+                "tier": "Free"
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "kubernetesVersion": "1.19.7",
+                "dnsPrefix": "[variables('containerSerivceManagedClustersDNSName')]",
+                "agentPoolProfiles": [
+                    {
+                        "name": "system",
+                        //"name": "[variables('containerSerivceManagedClustersPool1Name')]",
+                        //"nodeLabels": "[variables('containerSerivceManagedClustersPool1Label')]",
+                        //"osDiskSizeGB": 0,
+                        //"osDiskType": "Ephemeral",
+                        "count": 3,
+                        "vmSize": "[parameters('nodeSystemVmSize')]",
+                        "osType": "Linux",
+                        "storageProfile": "ManagedDisks",
+                        "type": "VirtualMachineScaleSets",
+                        "nodeTaints": [
+                            "CriticalAddonsOnly=true:NoSchedule"
+                        ],
+                        "mode": "System",
+                        "maxPods": 10,
+                        "minCount": 3,
+                        "maxCount": 100,
+                        "availabilityZones": [
+                            "1"
+                        ],
+                        "enableAutoScaling": true
+                    },
+                    {
+                        "name": "keda",
+
+                        //"name": "[variables('containerSerivceManagedClustersPool1Name')]",
+                        //"nodeLabels": "[variables('containerSerivceManagedClustersPool1Label')]",
+                        //"osDiskSizeGB": 0,
+                        //"osDiskType": "Ephemeral",
+                        "count": 3, 
+                        "vmSize": "[parameters('nodeSystemVmSize')]",
+                        "osType": "Linux",
+                        "storageProfile": "ManagedDisks",
+                        "type": "VirtualMachineScaleSets",
+                        "nodeTaints": [],
+                        "mode": "User",
+                        "maxPods": 10,
+                        "maxCount": 10,
+                        "minCount": 3,
+                        "enableAutoScaling": true
+                    },
+                    {
+                        "name": "worker",
+                        //"name": "[variables('containerSerivceManagedClustersPool2Name')]",
+                        //"nodeLabels": "[variables('containerSerivceManagedClustersPool2Label')]",
+                        "count": 1,
+                        "enableAutoScaling": true,
+                        "maxPods": 10,
+                        "minCount": 3,
+                        "vmSize": "[parameters('nodeWorkerVmSize')]",
+                        "osDiskSizeGB": 32,
+                        //"osDiskType": "Managed", or "Ephemeral"
+                        //"osDiskSizeGB": 0,
+                        "osDiskType": "[parameters('nodeWorkerOsDiskType')]",
+
+                        "maxCount": 800,
+                        "type": "VirtualMachineScaleSets",
+                        "orchestratorVersion": "1.19.7",
+                        "enableNodePublicIP": false,
+                        "nodeTaints": [
+                            "worker=true:NoSchedule"
+                        ],
+                        "mode": "User",
+                        "osType": "Linux"
+                    }
+                ],
+                "servicePrincipalProfile": {
+                    "clientId": "msi"
+                },
+                "addonProfiles": {
+                    "azurePolicy": {
+                        "enabled": false
+                    },
+                    "httpApplicationRouting": {
+                        "enabled": false
+                    },
+                    "omsAgent": {
+                        "enabled": true,
+                        "config": {
+                            "logAnalyticsWorkspaceResourceID": "[resourceId('microsoft.operationalinsights/workspaces', variables('operationalIinsightsWorkspaceName'))]"
+                        }
+                    }
+                },
+                "nodeResourceGroup": "[variables('containerSerivceManagedClustersNodeResourceGroupName')]",
+                "enableRBAC": true,
+                "networkProfile": {
+                    "networkPlugin": "kubenet",
+                    "loadBalancerSku": "Standard",
+                    "loadBalancerProfile": {
+                        "managedOutboundIPs": {
+                            "count": 1
+                        },
+                        "effectiveOutboundIPs": [
+                            {
+                                "id": "[resourceId('Microsoft.Network/publicIPAddresses',variables('containerSerivceManagedClustersPIPName'))]"
+                            }
+                        ]
+                    },
+                    "podCidr": "10.244.0.0/16",
+                    "serviceCidr": "10.0.0.0/16",
+                    "dnsServiceIP": "10.0.0.10",
+                    "dockerBridgeCidr": "172.17.0.1/16",
+                    "outboundType": "loadBalancer"
+                },
+                "apiServerAccessProfile": {
+                    "enablePrivateCluster": false
+                },
+                "identityProfile": {
+                    //"kubeletidentity": {
+                    //    "resourceId": "[parameters('userAssignedIdentities_dijkstra_akscluster_agentpool_externalid')]",
+                    //    "clientId": "86d5615c-ad2f-4210-b2d9-f8cfc0caf3c1",
+                    //    "objectId": "95fcd2a2-0d80-4358-805b-606df2a8b4d6"
+                    //}
+                }
+            },
+            "dependsOn": [
+                "[resourceId('microsoft.operationalinsights/workspaces',variables('operationalIinsightsWorkspaceName'))]",
+                "[resourceId('Microsoft.Network/publicIPAddresses',variables('containerSerivceManagedClustersPIPName'))]"
+            ]
+        },
+        {
+            "type": "Microsoft.Network/publicIPAddresses",
+            "apiVersion": "2020-05-01",
+            "name": "[variables('containerSerivceManagedClustersPIPName')]",
+            "location": "[variables('location')]",
+            "tags": {
+                "owner": "kubernetes",
+                "type": "aks-slb-managed-outbound-ip"
+            },
+            "sku": {
+                "name": "Standard"
+            },
+            "properties": {
+                "publicIPAddressVersion": "IPv4",
+                "publicIPAllocationMethod": "Static",
+                "idleTimeoutInMinutes": 30,
+                "ipTags": []
+            }
+        }
+        /*,
+        {
+            "name": "[variables('aks2sbAssignmentName')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "scope": "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]",
+            "apiVersion": "2020-04-01-preview",
+            "properties": {
+                "roleDefinitionId": "[variables('AzureServiceBusDataOwnerId')]",
+                "principalId": "[reference(resourceId('Microsoft.ContainerService/managedClusters', variables('containerSerivceManagedClustersName')), '2020-11-01', 'Full').identity.principalId]"
+            },
+            "dependsOn": [
+                //"[resourceId('Microsoft.ContainerService/managedClusters', variables('containerSerivceManagedClustersName'))]",
+                "[resourceId('Microsoft.ServiceBus/namespaces', variables('serviceBusNamespaceName'))]"
+            ]
+        }
+        */
+        /*,
+        {
+            "name": "[variables('aks2acrAssignmentName')]",
+            "type": "Microsoft.Authorization/roleAssignments",
+            "apiVersion": "2020-04-01-preview",
+            "scope": "[variables('containerRegistryScope')]",
+            "properties": {
+                "roleDefinitionId": "[variables('containerRegistryRoleAcrPullId')]",
+                "principalId": "[reference(resourceId('Microsoft.ContainerService/managedClusters', variables('containerSerivceManagedClustersName')), '2020-11-01', 'Full').identity.principalId]"
+            },
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', variables('containerSerivceManagedClustersName'))]"
+            ]
+        }
+        */
+    ],
+    "outputs": {
+        "APPLICATIONINSIGHTS_KEY": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/components', variables('insightsName')), providers('Microsoft.Insights', 'components').apiVersions[0]).InstrumentationKey]"
+        },
+        "APPLICATIONINSIGHTS_CONNECTION_STRING": {
+            "type": "string",
+            "value": "[reference(resourceId('Microsoft.Insights/components', variables('insightsName')), providers('Microsoft.Insights', 'components').apiVersions[0]).ConnectionString]"
+        },
+        "STORAGE_INPUT_NAME": {
+            "type": "string",
+            "value": "[concat(variables('storageAccountInputName'),'.blob.core.windows.net')]"
+        },
+        "STORAGE_INPUT_CONNECTION_STRING": {
+            "type": "string",
+            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountInputName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountInputName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value,';EndpointSuffix=','core.windows.net')]"
+        },
+        "STORAGE_INPUT_CONTAINER_NAME": {
+            "type": "string",
+            "value": "[variables('storageAccountInputContainerName')]"
+        },
+        "STORAGE_INPUT_SASTOKEN": {
+            "type": "string",
+            "value": "[listServiceSas(variables('storageAccountInputName'), '2019-06-01', variables('storageAccountInputSasValues')).serviceSasToken]"
+        },
+        "STORAGE_OUTPUT_NAME": {
+            "type": "string",
+            "value": "[concat(variables('storageAccountOutputName'),'.blob.core.windows.net')]"
+        },
+        "STORAGE_OUTPUT_CONNECTION_STRING": {
+            "type": "string",
+            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountOutputName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountOutputName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value,';EndpointSuffix=','core.windows.net')]"
+        },
+        "STORAGE_OUTPUT_CONTAINER_NAME": {
+            "type": "string",
+            "value": "[variables('storageAccountOutputContainerName')]"
+        },
+        "SERVICE_BUS_CONNECTION_STRING": {
+            "type": "string",
+            "value": "[listKeys(resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', variables('serviceBusNamespaceName'), 'RootManageSharedAccessKey'), providers('Microsoft.ServiceBus', 'namespaces/authorizationRules').apiVersions[0]).primaryConnectionString]"
+        },
+        "SERVICE_BUS_QUEUE_NAME": {
+            "type": "string",
+            "value": "[variables('serviceBusQueueName')]"
+        },
+        "RESOURCE_GROUP_NAME": {
+            "type": "string",
+            "value": "[resourceGroup().name]"
+        },
+        "LOCATION": {
+            "type": "string",
+            "value": "[variables('location')]"
+        },
+        "IS_SERVICE_BUS": {
+            "type": "string",
+            "value": "true"
+        },
+        "PREFIX": {
+            "type": "string",
+            "value": "[parameters('prefix')]"
+        }
+    }
+}

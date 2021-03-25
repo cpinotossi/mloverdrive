@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: ${PREFIX}
+  name: servicebusreceiver
+  labels:
+    app: servicebusreceiver
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: servicebusreceiver
+  template:
+    metadata:
+      labels:
+        app: servicebusreceiver
+    spec:
+      containers:
+        - name: servicebusreceiver
+          image: ${PREFIX}.azurecr.io/mlover-distroless:v1
+          imagePullPolicy: Always
+          env:${env}
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+               cpu: "1"
+               memory: "3Gi"
+            limits:
+              memory: "4.5Gi"
+              cpu: "1.5"
+      tolerations:
+        - key: "worker"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"

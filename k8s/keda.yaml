@@ -1,0 +1,34 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: azure-servicebus-auth
+  namespace: mloverdrive
+spec:
+  secretTargetRef:                                    # Optional.
+  - parameter: connection          # Required. defined based on the used scaler
+    name: mloverdrive-secrets                               # Required.
+    key: SERVICE_BUS_CONNECTION_STRING       
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: mloverdrive-scaledobject
+  namespace: mloverdrive # your namespace
+spec:
+  scaleTargetRef:
+    name: servicebusreceiver #name of your deployment
+  minReplicaCount: 3
+  maxReplicaCount: 100
+  pollingInterval: 1
+  cooldownPeriod: 120
+  triggers:
+  - type: azure-servicebus
+    metadata:
+      # Required: queueName OR topicName and subscriptionName
+      queueName: mloverdrive-servicebusqueue
+      # Required: Define what Azure Service Bus to authenticate to with Managed Identity
+      namespace: mloverdrive-servicebusnamespace
+      # Optional
+      messageCount: "1" # default 5
+    authenticationRef:
+      name: azure-servicebus-auth # authenticationRef would need either podIdentity or define a connection parameter
