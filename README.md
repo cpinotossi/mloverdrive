@@ -2,22 +2,26 @@
 
 Example of Azure AKS in combination with Azure Service Bus using Java
 
+![Reporting Table](/images/az.overview.01.png "Reporting Table")
+
+IMPORTANT: The grey are is not implemented.
+
 ## Clone from Git
 
 ~~~~pwsh
-PS C:\> git clone https://github.com/cpinotossi/mloverdrive.git
+PS C:\> git clone https://github.com/cpinotossi/az-aks-sb-java.git
 ~~~~
 
 Switch into subdirectory sbapp
 
 ~~~~pwsh
-PS C:\> cd mloverdrive
+PS C:\> cd sbapp
 ~~~~
 
 ## Package Maven Project
 
 ~~~~pwsh
-PS C:\mloverdrive> mvn clean package
+PS C:\sbapp> mvn clean package
 ~~~~
 
 ## Create Azure Environment
@@ -41,13 +45,13 @@ Replace the defaultValue "mloverdrive" of the parameter "prefix" inside the ARM 
 Start deployment:
 
 ~~~~pwsh
-PS C:\mloverdrive> az deployment group create --resource-group mloverdrive-rg --mode Incremental --name create-mloverdrive --template-file ./arm/deploy.json | Out-File -FilePath .\arm.deploy.output.json
+PS C:\sbapp> az deployment group create --resource-group mloverdrive-rg --mode Incremental --name create-mloverdrive --template-file ./arm/deploy.json | Out-File -FilePath .\arm.deploy.output.json
 ~~~~
 
 ARM Output Variables have been written to sbapp\arm.deploy.output.json after deployment finished.
 
 ~~~~pwsh
-PS C:\mloverdrive> ls .\arm.deploy.output.json
+PS C:\sbapp> ls .\arm.deploy.output.json
 
     Directory: C:\Users\chpinoto\workspace\az-aks-sb-java\sbapp
 
@@ -91,7 +95,7 @@ az role assignment create --role 090c5cfd-751d-490a-894a-3ce6f1109419 --assignee
 List the nodepools:
 
 ~~~~pwsh
-PS C:\mloverdrive> az aks nodepool list -g mloverdrive-rg --cluster-name mloverdrive-aks --output table
+PS C:\sbapp> az aks nodepool list -g mloverdrive-rg --cluster-name mloverdrive-aks --output table
 Name    OsType    KubernetesVersion    VmSize           Count    MaxPods    ProvisioningState    Mode
 ------  --------  -------------------  ---------------  -------  ---------  -------------------  ------
 keda    Linux     1.19.7               Standard_F8s_v2  2        10         Succeeded            User
@@ -104,7 +108,7 @@ worker  Linux     1.19.7               Standard_D2_v4   7        10         Succ
 Update Docker-, Kubernetes-, VisualStudioCode-Configuration:
 
 ~~~~pwsh
-PS C:\mloverdrive> node .\update.js
+PS C:\sbapp> node .\update.js
 Update:./Dockerfile
 Update:./jmeter/test.properties
 Update:../.vscode/launch.json
@@ -118,7 +122,7 @@ Update:./k8s/deploy.yaml
 Create local Docker Image:
 
 ~~~~pwsh
-PS C:\mloverdrive>  docker build . -t mloverdrive.azurecr.io/mlover-distroless:v1
+PS C:\sbapp>  docker build . -t mloverdrive.azurecr.io/mlover-distroless:v1
 ~~~~
 
 ## Log into the Azure Container Registration
@@ -126,19 +130,19 @@ PS C:\mloverdrive>  docker build . -t mloverdrive.azurecr.io/mlover-distroless:v
 Log into the Azure Container Registry
 
 ~~~~pwsh
-PS C:\mloverdrive> az acr login --name mloverdrive
+PS C:\sbapp> az acr login --name mloverdrive
 ~~~~
 
 ## Push images to registry
 
 ~~~~pwsh
-PS C:\mloverdrive> docker push mloverdrive.azurecr.io/mlover-distroless:v1
+PS C:\sbapp> docker push mloverdrive.azurecr.io/mlover-distroless:v1
 ~~~~
 
 ## Connect to cluster using kubectl
 
 ~~~~pwsh
-PS C:\mloverdrive> az aks get-credentials --resource-group mloverdrive-rg --name mloverdrive-aks
+PS C:\sbapp> az aks get-credentials --resource-group mloverdrive-rg --name mloverdrive-aks
 ~~~~
 
 ## Update Role Assignment between ACI and AKS via Azure CLI
@@ -148,7 +152,7 @@ This will allow AKS to access ACR to pull images from.
 TODO: Not working as expected
 
 ~~~~pwsh
-PS C:\mloverdrive> az aks update -n mloverdrive-aks -g mloverdrive-rg --attach-acr mloverdrive
+PS C:\\sbapp> az aks update -n mloverdrive-aks -g mloverdrive-rg --attach-acr mloverdrive
 ~~~~
 
 Based on https://docs.microsoft.com/en-us/azure/aks/cluster-container-registry-integration#configure-acr-integration-for-existing-aks-clusters
@@ -158,13 +162,13 @@ Based on https://docs.microsoft.com/en-us/azure/aks/cluster-container-registry-i
 Create new Namespace at Kubernetes
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl create namespace mloverdrive
+PS C:\sbapp> kubectl create namespace mloverdrive
 ~~~~
 
 Create Kubernetes Secret
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl apply -f ./k8s/secret.yaml
+PS C:\sbapp> kubectl apply -f ./k8s/secret.yaml
 ~~~~
 
 Update containers:image reference inside the deploy.yaml:
@@ -181,7 +185,7 @@ Update containers:image reference inside the deploy.yaml:
 Create deployment at Kubernetes
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl apply -f ./k8s/deploy.yaml
+PS C:\sbapp> kubectl apply -f ./k8s/deploy.yaml
 ~~~~
 
 ## Setup KEDA
@@ -189,7 +193,7 @@ PS C:\mloverdrive> kubectl apply -f ./k8s/deploy.yaml
 ### Install KEDA via yaml
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl apply -f https://github.com/kedacore/keda/releases/download/v2.2.0/keda-2.2.0.yaml
+PS C:\sbapp> kubectl apply -f https://github.com/kedacore/keda/releases/download/v2.2.0/keda-2.2.0.yaml
 ~~~~
 
 ### Deploy Keda Scaler:
@@ -235,7 +239,7 @@ Kubernetes Namespace "mloverdrive" is aligned to the AKS "Nodes Pool" "worker" w
 This can be looked up as follow:
 
 ~~~~pwsh
-PS C:\mloverdrive> az aks nodepool list --resource-group mloverdrive-rg --cluster-name mloverdrive-aks -o table
+PS C:\Users\chpinoto> az aks nodepool list --resource-group mloverdrive-rg --cluster-name mloverdrive-aks -o table
 Name    OsType    KubernetesVersion    VmSize           Count    MaxPods    ProvisioningState    Mode
 ------  --------  -------------------  ---------------  -------  ---------  -------------------  ------
 keda    Linux     1.19.7               Standard_F8s_v2  3        10         Succeeded            User
@@ -248,7 +252,7 @@ This can also be verified directly via Kubernetes (kubectl).
 NOTE: "aks-worker-*" are the once aligend to the AKS "Nodes Pool" "worker".
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive get nodes
+PS C:\Users\chpinoto> kubectl -n mloverdrive get nodes
 NAME                             STATUS   ROLES   AGE   VERSION
 aks-keda-30372806-vmss000000     Ready    agent   12h   v1.19.7
 aks-keda-30372806-vmss000001     Ready    agent   12h   v1.19.7
@@ -287,7 +291,7 @@ spec:
 Or via the corresponding Horizontal Pod Autoscaler [hpa]:
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive get hpa -w
+PS C:\Users\chpinoto> kubectl -n mloverdrive get hpa -w
 NAME                                REFERENCE                       TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
 keda-hpa-mloverdrive-scaledobject   Deployment/servicebusreceiver   0/1 (avg)   3         100       3          11h
 ~~~~
@@ -313,7 +317,7 @@ Lookup corresponding KEDA scaleobject status:
 NOTE: Here you will find all the corresponding settings of your k8s/keda.yaml.
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive get scaledobject -w
+PS C:\Users\chpinoto> kubectl -n mloverdrive get scaledobject -w
 NAME                       SCALETARGETKIND      SCALETARGETNAME      MIN   MAX   TRIGGERS           AUTHENTICATION          READY   ACTIVE   AGE
 mloverdrive-scaledobject   apps/v1.Deployment   servicebusreceiver   3     100   azure-servicebus   azure-servicebus-auth   True    False    11h
 ~~~~
@@ -321,7 +325,7 @@ mloverdrive-scaledobject   apps/v1.Deployment   servicebusreceiver   3     100  
 This can be looked up directly inside the kubernetes namespace:
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive get pods
+PS C:\Users\chpinoto> kubectl -n mloverdrive get pods
 NAME                                  READY   STATUS    RESTARTS   AGE
 servicebusreceiver-77c478ffcc-7dvkj   1/1     Running   0          32m
 servicebusreceiver-77c478ffcc-h8sdg   1/1     Running   0          31m
@@ -335,7 +339,7 @@ Get the logs of one Pod
 NOTE: Pod name will differ from the one used here ("servicebusreceiver-77c478ffcc-7dvkj") in your environment.
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive logs servicebusreceiver-77c478ffcc-7dvkj -f
+PS C:\Users\chpinoto> kubectl -n mloverdrive logs servicebusreceiver-77c478ffcc-7dvkj -f
 Picked up _JAVA_OPTIONS: -Xmx2g -Xms2g
 IsSB:true
 SBQN:mloverdrive-servicebusqueue
@@ -404,7 +408,7 @@ Histogram:
 At peak time we run 6 pods (REPLICAS)
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive get hpa -w
+PS C:\Users\chpinoto> kubectl -n mloverdrive get hpa -w
 NAME                                REFERENCE                       TARGETS     MINPODS   MAXPODS   REPLICAS   AGE
 keda-hpa-mloverdrive-scaledobject   Deployment/servicebusreceiver   0/1 (avg)   3         100       3          12h
 keda-hpa-mloverdrive-scaledobject   Deployment/servicebusreceiver   2/1 (avg)   3         100       3          12h
@@ -454,7 +458,7 @@ mloverdrive-scaledobject   apps/v1.Deployment   servicebusreceiver   3     100  
 Number of aks-worker nodes did increase to max of 6
 
 ~~~~pwsh
-PS C:\mloverdrive> kubectl -n mloverdrive get node -w
+PS C:\Users\chpinoto> kubectl -n mloverdrive get node -w
 NAME                             STATUS   ROLES   AGE   VERSION
 aks-keda-30372806-vmss000000     Ready    agent   13h   v1.19.7
 aks-keda-30372806-vmss000001     Ready    agent   13h   v1.19.7
