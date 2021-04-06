@@ -489,6 +489,22 @@ aks-keda-30372806-vmss000001     Ready    agent   14h   v1.19.7
 aks-worker-30372806-vmss000000   Ready    agent   14h   v1.19.7
 ~~~~
 
+## Tips
+
+### How many nodes for my system pods?
+
+- None burstable DS4 VM SKUs should be fine.
+- Use a VM SKU that supports ephemeral OS and has enough capacity for system components (which depend on which addons we run on our Kubernetes)
+- Run it in HA, so a DS4 is generally good SKU for it, of minimum 2 nodes, for large clusters with multiple coredns replicas and addons (3/4+).
+
+One system nodepool is enough so long as it’s just running system pods.
+
 ## Open Points:
 - Consider the KEDA [ScaledJob](https://github.com/kedacore/keda-docs/blob/master/content/docs/2.0/concepts/scaling-jobs.md) instead of ScaledObject
 - Use [AAD Pod Identity](https://github.com/Azure/aad-pod-identity) to access Azure Service Bus via [KEDA](https://keda.sh/docs/2.2/concepts/authentication/#pod-authentication-providers)
+- Review if [overprovisioning with Cluster Autoscaler](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#how-can-i-configure-overprovisioning-with-cluster-autoscaler) would work with KEDA
+- Alternative [konzept](https://github.com/Azure-Samples/virtual-node-autoscale) based on virtual nodes.
+
+## Usefull Links
+- [Scaling options for applications in Azure Kubernetes Service (AKS)](https://docs.microsoft.com/en-us/azure/aks/concepts-scale)
+- [How to faster Node Scale your Kubernetes cluster](https://itnext.io/how-to-faster-node-scale-your-kubernetes-cluster-2c988c7c7d08)
