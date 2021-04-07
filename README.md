@@ -504,6 +504,7 @@ One system nodepool is enough so long as it’s just running system pods.
 - Use [AAD Pod Identity](https://github.com/Azure/aad-pod-identity) to access Azure Service Bus via [KEDA](https://keda.sh/docs/2.2/concepts/authentication/#pod-authentication-providers)
 - Review if [overprovisioning with Cluster Autoscaler](https://github.com/kubernetes/autoscaler/blob/master/cluster-autoscaler/FAQ.md#how-can-i-configure-overprovisioning-with-cluster-autoscaler) would work with KEDA
 - Alternative [konzept](https://github.com/Azure-Samples/virtual-node-autoscale) based on virtual nodes.
+- ![Scale using aks with aci virtual node](https://docs.microsoft.com/en-us/azure/architecture/solution-ideas/articles/scale-using-aks-with-aci)
 
 ## Usefull Links
 - [Scaling options for applications in Azure Kubernetes Service (AKS)](https://docs.microsoft.com/en-us/azure/aks/concepts-scale)
